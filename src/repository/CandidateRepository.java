@@ -12,14 +12,20 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class CandidateRepository {
+    private static final CandidateRepository INSTANCE = new CandidateRepository();
+
     private final List<Candidate> candidates = new ArrayList<>();
 
-    public CandidateRepository() {
+    private CandidateRepository() {
         loadCandidates();
     }
 
+    public static CandidateRepository getInstance() {
+        return INSTANCE;
+    }
+
     public List<Candidate> findAll() {
-        return new ArrayList<>(candidates);
+        return candidates;
     }
 
     public Candidate findById(int id) {
@@ -31,9 +37,15 @@ public class CandidateRepository {
         return null;
     }
 
+    public void incrementVote(int id) {
+        Candidate candidate = findById(id);
+        if (candidate != null) {
+            candidate.setVotes(candidate.getVotes() + 1);
+        }
+    }
+
     private void loadCandidates() {
         try (Reader reader = new FileReader("data/candidates.json")) {
-
             JsonParser parser = new JsonParser();
             JsonElement root = parser.parse(reader);
 
@@ -46,8 +58,15 @@ public class CandidateRepository {
                 }
             } else if (root.isJsonObject()) {
                 JsonObject object = root.getAsJsonObject();
+                JsonArray array = null;
+
                 if (object.has("candidates") && object.get("candidates").isJsonArray()) {
-                    JsonArray array = object.getAsJsonArray("candidates");
+                    array = object.getAsJsonArray("candidates");
+                } else if (object.has("items") && object.get("items").isJsonArray()) {
+                    array = object.getAsJsonArray("items");
+                }
+
+                if (array != null) {
                     for (JsonElement element : array) {
                         if (element.isJsonObject()) {
                             candidates.add(parseCandidate(element.getAsJsonObject()));
@@ -70,6 +89,9 @@ public class CandidateRepository {
         }
         if (photo.isBlank()) {
             photo = getString(object, "img", "");
+        }
+        if (photo.isBlank()) {
+            photo = getString(object, "avatar", "anon.jpeg");
         }
 
         int votes = getInt(object, "votes", 0);

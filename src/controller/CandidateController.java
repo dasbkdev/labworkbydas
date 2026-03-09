@@ -1,7 +1,9 @@
 package controller;
 
 import model.Candidate;
+import model.VoteResult;
 import service.CandidateService;
+import util.TemplateUtils;
 
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -14,132 +16,109 @@ public class CandidateController {
 
     public void showCandidates(OutputStream out) throws Exception {
         List<Candidate> candidates = candidateService.getAllCandidates();
+        String template = TemplateUtils.readFile("data/candidates.html");
 
-        StringBuilder html = new StringBuilder();
-
-        html.append("""
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Candidates</title>
-                    <link rel="stylesheet" href="/css/candidates.css">
-                </head>
-                <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>Voting Service</h1>
-                        <div class="nav-links">
-                            <a href="/candidates">Candidates</a>
-                            <a href="/votes">Votes</a>
-                        </div>
-                    </div>
-                    <div class="cards">
-                """);
+        StringBuilder cards = new StringBuilder();
 
         for (Candidate candidate : candidates) {
-            String imageFile = candidate.getPhoto();
-            String imagePath = "/images/" + imageFile;
-
-            html.append("""
-                    <div class="card">
+            cards.append("""
+                    <div class="candidate-card">
                     """);
-
-            html.append("<img class=\"candidate-image\" src=\"")
-                    .append(imagePath)
+            cards.append("<img class=\"candidate-image\" src=\"/images/")
+                    .append(TemplateUtils.escapeHtml(candidate.getPhoto()))
                     .append("\" alt=\"")
-                    .append(escapeHtml(candidate.getName()))
+                    .append(TemplateUtils.escapeHtml(candidate.getName()))
                     .append("\">");
 
-            html.append("<h2>")
-                    .append(escapeHtml(candidate.getName()))
-                    .append("</h2>");
-
-            html.append("<p>Votes: ")
-                    .append(candidate.getVotes())
-                    .append("</p>");
-
-            html.append("<form method=\"post\" action=\"/vote\">")
-                    .append("<input type=\"hidden\" name=\"id\" value=\"")
-                    .append(candidate.getId())
-                    .append("\">")
-                    .append("<button type=\"submit\">Vote</button>")
-                    .append("</form>");
-
-            html.append("</div>");
+            cards.append("<div class=\"candidate-content\">");
+            cards.append("<h2>").append(TemplateUtils.escapeHtml(candidate.getName())).append("</h2>");
+            cards.append("<p class=\"vote-count\">Votes: ").append(candidate.getVotes()).append("</p>");
+            cards.append("<form method=\"post\" action=\"/vote\">");
+            cards.append("<input type=\"hidden\" name=\"id\" value=\"").append(candidate.getId()).append("\">");
+            cards.append("<button type=\"submit\" class=\"vote-button\">Vote</button>");
+            cards.append("</form>");
+            cards.append("</div>");
+            cards.append("</div>");
         }
 
-        html.append("""
+        String body = template.replace("{{candidates}}", cards.toString());
+        sendHtml(out, body);
+    }
+
+    public void showThankYou(OutputStream out, String userId, Integer candidateId) throws Exception {
+        String template = TemplateUtils.readFile("data/thankyou.html");
+
+        if (candidateId == null) {
+            showCandidateNotFound(out);
+            return;
+        }
+
+        Candidate candidate = candidateService.getCandidateById(candidateId);
+
+        if (candidate == null) {
+            showCandidateNotFound(out);
+            return;
+        }
+
+        double percent = candidateService.getPercentForCandidate(candidate);
+
+        String body = template
+                .replace("{{candidateName}}", TemplateUtils.escapeHtml(candidate.getName()))
+                .replace("{{candidateVotes}}", String.valueOf(candidate.getVotes()))
+                .replace("{{candidatePercent}}", String.format("%.2f", percent));
+
+        sendHtml(out, body);
+    }
+
+    public void showVotes(OutputStream out) throws Exception {
+        String template = TemplateUtils.readFile("data/votes.html");
+        List<VoteResult> results = candidateService.getSortedVoteResults();
+
+        StringBuilder rows = new StringBuilder();
+
+        for (VoteResult result : results) {
+            rows.append("<tr>");
+            rows.append("<td>").append(TemplateUtils.escapeHtml(result.getCandidate().getName())).append("</td>");
+            rows.append("<td>").append(String.format("%.2f%%", result.getPercent())).append("</td>");
+            rows.append("</tr>");
+        }
+
+        String body = template.replace("{{voteRows}}", rows.toString());
+        sendHtml(out, body);
+    }
+
+    public void showCandidateNotFound(OutputStream out) throws Exception {
+        String body = """
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>Candidate not found</title>
+                    <link rel="stylesheet" href="/css/candidates.css">
+                </head>
+                <body>
+                    <div class="page-shell">
+                        <div class="single-box">
+                            <h1>Candidate not found</h1>
+                            <p>The selected candidate does not exist.</p>
+                            <div class="nav-actions">
+                                <a class="nav-button" href="/candidates">Back to candidates</a>
+                                <a class="nav-button secondary" href="/votes">View results</a>
+                            </div>
+                        </div>
                     </div>
-                </div>
                 </body>
                 </html>
-                """);
+                """;
 
-        byte[] bodyBytes = html.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
 
-        out.write(("HTTP/1.1 200 OK\r\n" +
+        out.write(("HTTP/1.1 404 Not Found\r\n" +
                 "Content-Type: text/html; charset=UTF-8\r\n" +
-                "Content-Length: " + bodyBytes.length + "\r\n" +
+                "Content-Length: " + bytes.length + "\r\n" +
                 "\r\n").getBytes(StandardCharsets.UTF_8));
 
-        out.write(bodyBytes);
+        out.write(bytes);
         out.flush();
-    }
-
-    public void showVotesStub(OutputStream out) throws Exception {
-        String body = """
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Votes</title>
-                    <link rel="stylesheet" href="/css/candidates.css">
-                </head>
-                <body>
-                    <div class="container">
-                        <div class="header">
-                            <h1>Votes</h1>
-                            <div class="nav-links">
-                                <a href="/candidates">Candidates</a>
-                                <a href="/votes">Votes</a>
-                            </div>
-                        </div>
-                        <div class="card single-card">
-                            <p>This page will be implemented on the next step.</p>
-                        </div>
-                    </div>
-                </body>
-                </html>
-                """;
-
-        sendHtml(out, body);
-    }
-
-    public void showThankYouStub(OutputStream out) throws Exception {
-        String body = """
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <title>Thank you</title>
-                    <link rel="stylesheet" href="/css/candidates.css">
-                </head>
-                <body>
-                    <div class="container">
-                        <div class="header">
-                            <h1>Thank you</h1>
-                            <div class="nav-links">
-                                <a href="/candidates">Candidates</a>
-                                <a href="/votes">Votes</a>
-                            </div>
-                        </div>
-                        <div class="card single-card">
-                            <p>This page will be implemented on the next step.</p>
-                        </div>
-                    </div>
-                </body>
-                </html>
-                """;
-
-        sendHtml(out, body);
     }
 
     public void sendCss(OutputStream out) throws Exception {
@@ -159,17 +138,7 @@ public class CandidateController {
         Path imagePath = Path.of("data", fileName);
 
         if (!Files.exists(imagePath)) {
-            String body = "Image not found";
-            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-
-            out.write(("HTTP/1.1 404 Not Found\r\n" +
-                    "Content-Type: text/plain; charset=UTF-8\r\n" +
-                    "Content-Length: " + bytes.length + "\r\n" +
-                    "\r\n").getBytes(StandardCharsets.UTF_8));
-
-            out.write(bytes);
-            out.flush();
-            return;
+            imagePath = Path.of("data", "anon.jpeg");
         }
 
         byte[] imageBytes = Files.readAllBytes(imagePath);
@@ -193,13 +162,5 @@ public class CandidateController {
 
         out.write(bytes);
         out.flush();
-    }
-
-    private String escapeHtml(String value) {
-        return value
-                .replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-                .replace("\"", "&quot;");
     }
 }

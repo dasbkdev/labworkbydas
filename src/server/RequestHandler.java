@@ -1,6 +1,8 @@
 package server;
 
 import controller.CandidateController;
+import controller.VoteController;
+import service.VoteService;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -10,6 +12,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class RequestHandler {
     private final Socket socket;
@@ -30,7 +33,17 @@ public class RequestHandler {
             }
 
             String line;
+            int contentLength = 0;
+            String cookieHeader = "";
+
             while ((line = in.readLine()) != null && !line.isEmpty()) {
+                String lower = line.toLowerCase();
+                if (lower.startsWith("content-length:")) {
+                    contentLength = Integer.parseInt(line.substring(line.indexOf(":") + 1).trim());
+                }
+                if (lower.startsWith("cookie:")) {
+                    cookieHeader = line.substring(line.indexOf(":") + 1).trim();
+                }
             }
 
             String[] parts = requestLine.split(" ");
@@ -47,21 +60,39 @@ public class RequestHandler {
             }
 
             Map<String, String> queryParams = parseParams(queryString);
+            Map<String, String> cookies = parseCookies(cookieHeader);
+
+            String userId = cookies.get("userId");
+            if (userId == null || userId.isBlank()) {
+                userId = UUID.randomUUID().toString();
+            }
 
             CandidateController candidateController = new CandidateController();
+            VoteController voteController = new VoteController();
+            VoteService voteService = new VoteService();
 
             if ("GET".equalsIgnoreCase(method) && (path.equals("/") || path.equals("/candidates"))) {
                 candidateController.showCandidates(out);
                 return;
             }
 
-            if ("GET".equalsIgnoreCase(method) && path.equals("/votes")) {
-                candidateController.showVotesStub(out);
+            if ("POST".equalsIgnoreCase(method) && path.equals("/vote")) {
+                char[] bodyChars = new char[contentLength];
+                int read = in.read(bodyChars);
+                String body = read > 0 ? new String(bodyChars, 0, read) : "";
+                Map<String, String> bodyParams = parseParams(body);
+                voteController.handleVote(out, bodyParams, userId);
                 return;
             }
 
             if ("GET".equalsIgnoreCase(method) && path.equals("/thankyou")) {
-                candidateController.showThankYouStub(out);
+                Integer candidateId = voteService.getVotedCandidateId(userId);
+                candidateController.showThankYou(out, userId, candidateId);
+                return;
+            }
+
+            if ("GET".equalsIgnoreCase(method) && path.equals("/votes")) {
+                candidateController.showVotes(out);
                 return;
             }
 
@@ -105,6 +136,25 @@ public class RequestHandler {
         return params;
     }
 
+    private Map<String, String> parseCookies(String cookieHeader) {
+        Map<String, String> cookies = new HashMap<>();
+
+        if (cookieHeader == null || cookieHeader.isBlank()) {
+            return cookies;
+        }
+
+        String[] pairs = cookieHeader.split(";");
+
+        for (String pair : pairs) {
+            String[] kv = pair.trim().split("=", 2);
+            if (kv.length == 2) {
+                cookies.put(kv[0].trim(), kv[1].trim());
+            }
+        }
+
+        return cookies;
+    }
+
     private String decode(String value) {
         return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
@@ -112,10 +162,21 @@ public class RequestHandler {
     private void send404(OutputStream out) throws Exception {
         String body = """
                 <html>
-                <head><meta charset="UTF-8"><title>404</title></head>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>404</title>
+                    <link rel="stylesheet" href="/css/candidates.css">
+                </head>
                 <body>
-                    <h1>404</h1>
-                    <p>Page not found</p>
+                    <div class="page-shell">
+                        <div class="single-box">
+                            <h1>404</h1>
+                            <p>Page not found</p>
+                            <div class="nav-actions">
+                                <a class="nav-button" href="/candidates">Back to candidates</a>
+                            </div>
+                        </div>
+                    </div>
                 </body>
                 </html>
                 """;

@@ -3,17 +3,17 @@ package service;
 import repository.VoteRepository;
 
 public class VoteService {
-    private final VoteRepository voteRepository = new VoteRepository();
+    private final VoteRepository repository = VoteRepository.getInstance();
 
-    public void saveVote(String userKey, int candidateId) {
-        voteRepository.saveVote(userKey, candidateId);
+    public boolean hasUserVoted(String userId) {
+        return repository.hasUserVoted(userId);
     }
 
-    public Integer getVoteByUser(String userKey) {
-        return voteRepository.findVoteByUser(userKey);
+    public void saveVote(String userId, int candidateId) {
+        repository.saveVote(userId, candidateId);
     }
 
-    public boolean hasUserVoted(String userKey) {
-        return voteRepository.hasUserVoted(userKey);
+    public Integer getVotedCandidateId(String userId) {
+        return repository.findVotedCandidateId(userId);
     }
 }

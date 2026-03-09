@@ -1,8 +1,8 @@
 package model;
 
 public class VoteResult {
-    private Candidate candidate;
-    private double percent;
+    private final Candidate candidate;
+    private final double percent;
 
     public VoteResult(Candidate candidate, double percent) {
         this.candidate = candidate;
