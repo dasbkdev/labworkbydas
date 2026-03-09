@@ -1,0 +1,35 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Voting Results</title>
+    <link rel="stylesheet" href="/css/candidates.css">
+</head>
+<body>
+<div class="page-shell">
+    <div class="hero">
+        <div>
+            <h1>Voting Results</h1>
+            <p>Candidates are sorted by number of votes.</p>
+        </div>
+        <div class="nav-actions">
+            <a class="nav-button" href="/candidates">Candidates</a>
+            <a class="nav-button secondary" href="/votes">Results</a>
+        </div>
+    </div>
+
+    <div class="single-box">
+        <table class="results-table">
+            <thead>
+            <tr>
+                <th>Candidate</th>
+                <th>Percent of votes</th>
+            </tr>
+            </thead>
+            <tbody>
+            {{voteRows}}
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>
